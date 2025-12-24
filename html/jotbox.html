@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JotBox</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <link href="jotbox.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.ico">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
+</head>
+<body class="bg-dark text-light">
+
+<nav class="navbar navbar-dark bg-teal px-3">
+    <a class="navbar-brand d-flex align-items-center" href="#">
+        <img src="images/cube.png" alt="JotBox Logo" height="48" class="mr-2">&nbsp;
+        <span class="font-weight-bold">Jotbox</span>
+    </a>
+    <button class="btn btn-outline-light btn-sm">Logout</button>
+</nav>
+
+<div class="container-fluid">
+    <div class="row no-gutters">
+
+        <!-- Sidebar -->
+        <div class="col-md-2 sidebar d-flex flex-column py-3">
+            <button class="btn btn-teal mb-2">New Note</button>
+            <button class="btn btn-outline-teal mb-2">Save</button>
+            <button class="btn btn-outline-danger mb-2">Delete</button>
+        </div>
+
+        <!-- Note Editor -->
+        <div class="col-md-7 p-3 note-editor">
+
+<div id=editor style="margin-bottom: 23px; height: 80%"></div>
+<div style="display: none"><textarea id="content">This is a comment written in [Markdown](http://commonmark.org). *You* may know the syntax for inserting a link, but does your whole audience?&#13;&#13;So you can give people the **choice** to use a more familiar, discoverable interface.</textarea></div>
+
+        </div>
+
+        <!-- Sidebar Right -->
+        <div class="col-md-3 right-sidebar p-3">
+            <h5 class="text-teal">Recent</h5>
+            <ul class="list-group mb-3">
+                <li class="list-group-item">Blue Lagoon (Buxton)</li>
+                <li class="list-group-item">Leonardo da Vinci</li>
+            </ul>
+
+            <h5 class="text-teal">Related</h5>
+            <ul class="list-group">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Update March 2025
+                    <div class="related-score-bar" style="width: 100px;">
+                        <div style="width: 80%; height: 6px; background: #00b3b3;"></div>
+                    </div>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    iOS Shielder
+                    <div class="related-score-bar" style="width: 80px;">
+                        <div style="width: 80%; height: 6px; background: #00b3b3;"></div>
+                    </div>
+                </li>
+            </ul>
+
+            <button class="btn btn-outline-teal mt-2" data-toggle="modal" data-target="#graphModal">
+                Search Graph
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
+<link href="editor.css" rel="stylesheet">
+<script src="/js/prosemirror.js"></script>
+
+<div class="modal fade" id="graphModal" tabindex="-1" role="dialog" aria-labelledby="graphModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-teal" id="graphModalLabel">Note Graph Search</h5>
+                <button type="button" class="btn btn-close-modern" data-dismiss="modal" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 5L15 15M15 5L5 15" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body p-0">
+                <!-- This is where your graph visualization goes -->
+                <div id="graphContainer" style="height: 600px; width: 100%; background: #0e0f1b;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $('#graphModal').on('shown.bs.modal', function () {
+        // Delay helps rendering; place your graph init here
+        setTimeout(() => {
+            initNoteGraph(); // Replace with your actual graph rendering function
+        }, 100);
+    });
+
+</script>
+<script src="markdown-editor.js"></script>
+
+</body>
+</html>

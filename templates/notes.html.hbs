@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JotBox</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NV6XQGTN32"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-NV6XQGTN32');
+    </script>
+
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <link href="jotbox.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.ico">
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" integrity="sha384-eJrXRL5wsADawEkNBdIvuXvEz+eASVigJNwP8wGz3++vS0FRIlpcVrSIP19Ezi0s" crossorigin="anonymous"></script>
+
+    <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/layout-base/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-layout-utilities/cytoscape-layout-utilities.js"></script>
+    <script>
+        const TOPIC_COLOUR_PALETTE = [
+            '#00b3b3',
+            '#f4a261',
+            '#e76f51',
+            '#2a9d8f',
+            '#8ab17d',
+            '#f4d35e',
+            '#b56576',
+            '#6c5ce7',
+            '#ff5d8f'
+        ];
+
+        function normalizeTopicKey(topic, fallbackGroup) {
+            if (topic && topic.length > 0) {
+                return topic.trim().toLowerCase();
+            }
+            if (typeof fallbackGroup === 'number') {
+                return `group-${fallbackGroup}`;
+            }
+            return 'default';
+        }
+
+        function topicColorFor(topic, fallbackGroup) {
+            const key = normalizeTopicKey(topic, fallbackGroup);
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = (hash * 31 + key.charCodeAt(i)) & 0xffffffff;
+            }
+            const palette = TOPIC_COLOUR_PALETTE;
+            const idx = Math.abs(hash) % palette.length;
+            return palette[idx];
+        }
+
+        function hexToRgb(hex) {
+            if (!hex || hex[0] !== '#' || (hex.length !== 7 && hex.length !== 4)) {
+                return null;
+            }
+            const value = hex.length === 4
+                ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+                : hex;
+            const bigint = parseInt(value.slice(1), 16);
+            return {
+                r: (bigint >> 16) & 255,
+                g: (bigint >> 8) & 255,
+                b: bigint & 255
+            };
+        }
+
+        function topicTextColor(hex) {
+            const rgb = hexToRgb(hex);
+            if (!rgb) {
+                return '#102327';
+            }
+            const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+            return brightness > 150 ? '#043031' : '#f4ffff';
+        }
+
+        function topicBackgroundColour(hex) {
+            const rgb = hexToRgb(hex);
+            if (!rgb) {
+                return 'rgba(0, 179, 179, 0.18)';
+            }
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`;
+        }
+
+        window.TOPIC_COLOUR_PALETTE = TOPIC_COLOUR_PALETTE;
+        window.topicColorFor = topicColorFor;
+        window.topicTextColor = topicTextColor;
+        window.topicBackgroundColour = topicBackgroundColour;
+    </script>
+    <script src="/js/cy-data.js"></script>
+    <script src="js/encryption.js"></script>
+
+</head>
+<body class="bg-dark text-light">
+
+<nav class="navbar navbar-dark bg-teal px-3">
+    <a class="navbar-brand d-flex align-items-center" href="#">
+        <img src="images/cube.png" alt="JotBox Logo" height="48" class="mr-2">&nbsp;
+        <span class="font-weight-bold">Jotbox</span>
+    </a>
+    <button id="stats-div" class="btn btn-link text-light font-weight-bold mr-2 d-flex align-items-center"
+            type="button" data-toggle="modal" data-target="#graphModal" title="Open note graph">
+        <span class="mr-2" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <g stroke="#c8f0f0" stroke-width="1.5" stroke-linecap="round">
+                    <line x1="5" y1="8" x2="10" y2="4"></line>
+                    <line x1="10" y1="4" x2="15" y2="7"></line>
+                    <line x1="5" y1="8" x2="7" y2="15"></line>
+                    <line x1="15" y1="7" x2="13" y2="14"></line>
+                    <line x1="7" y1="15" x2="13" y2="14"></line>
+                </g>
+                <g fill="#e3f8f8" stroke="none">
+                    <circle cx="10" cy="4" r="1.8"></circle>
+                    <circle cx="5" cy="8" r="1.6"></circle>
+                    <circle cx="15" cy="7" r="1.6"></circle>
+                    <circle cx="7" cy="15" r="1.6"></circle>
+                    <circle cx="13" cy="14" r="1.6"></circle>
+                </g>
+            </svg>
+        </span>
+        <span id="stats-text">Loading…</span>
+    </button>
+    <button class="btn btn-outline-light btn-sm" onClick="logout()">Logout {{name}}</button>
+</nav>
+
+<div class="container-fluid">
+    <div class="row no-gutters">
+
+        <!-- Sidebar -->
+        <div class="col-md-2 sidebar d-flex flex-column py-3">
+            <button class="btn btn-teal mb-2" onclick="new_note()">New Note</button>
+            <button class="btn btn-outline-teal mb-2" onclick="save_note()">Save</button>
+            <button class="btn btn-outline-danger mb-2" onclick="delete_note()">Delete</button>
+        </div>
+
+        <!-- Note Editor -->
+        <div class="col-md-7 p-3" style="margin-bottom: 23px; max-height: 90vh">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span id="noteTopicBadge" class="badge topic-badge d-none">Topic</span>
+            </div>
+            <div id=editor style="height: 100%; overflow: scroll"></div>
+        </div>
+
+        <!-- Sidebar Right -->
+        <div class="col-md-3 right-sidebar p-3">
+            <h5 class="text-teal">Recent</h5>
+            <ul class="list-group mb-3" id="recent"></ul>
+
+            <h5 class="text-teal">Related</h5>
+            <ul class="list-group" id="related"></ul>
+
+            <div class="d-flex flex-column gap-2 mt-2">
+                <button class="btn btn-outline-light" data-toggle="modal" data-target="#chatModal">
+                    Chat
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="chatModal" tabindex="-1" role="dialog" aria-labelledby="chatModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <div>
+                    <h5 class="modal-title text-teal" id="chatModalLabel">Ask Jotbox</h5>
+                    <small class="text-muted">Chat over your encrypted notes – responses generated via the Ollama backend.</small>
+                </div>
+                <button type="button" class="btn btn-close-modern" data-dismiss="modal" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 5L15 15M15 5L5 15" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="chat-history" class="chat-history border rounded p-3 mb-3" style="height: 45vh; overflow-y: auto;">
+                            <p class="text-muted">Start the conversation by asking a question about your notes.</p>
+                        </div>
+                        <div id="chatStatus" class="small text-warning d-none mb-2"></div>
+                        <div class="form-group">
+                            <label for="chatPrompt" class="text-teal">Prompt</label>
+                            <textarea class="form-control bg-dark text-light mb-3" id="chatPrompt" rows="3" placeholder="Ask a question about your notes..."></textarea>
+                        </div>
+                <div class="text-right mt-3">
+                    <button class="btn btn-outline-teal" id="chatSendButton">
+                        <span id="chatSendSpinner" class="spinner-border spinner-border-sm mr-2 d-none" role="status" aria-hidden="true"></span>
+                        <span id="chatSendLabel">Send</span>
+                    </button>
+                    <button class="btn btn-outline-danger ml-2" id="chatClearButton">Clear Chat</button>
+                </div>
+            </div>
+            <div class="col-md-4 d-flex flex-column">
+                        <div class="border rounded p-3 mb-3 flex-grow-1" style="min-height: 35vh;">
+                            <h6 class="text-teal">Sources</h6>
+                            <ul class="list-group list-group-flush small" id="chatSourcesList">
+                                <li class="list-group-item bg-transparent text-muted">No context selected yet.</li>
+                            </ul>
+                        </div>
+                        <div class="border rounded p-3 mt-auto">
+                            <h6 class="text-teal">Privacy reminder</h6>
+                            <p class="small text-muted mb-0">
+                                Your notes stay encrypted on disk. When you chat, only the snippets you choose are decrypted locally and sent for this one answer—then discarded.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="confirmDialog" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Please confirm</h5>
+                <button type="button" class="btn btn-close-modern" data-dismiss="modal" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 5L15 15M15 5L5 15" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                You have unsaved changes to your note.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="resume_discard()">Discard</button>
+                <button type="button" class="btn btn-primary" data-dismiss="modal" onclick="resume_save()">Save changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteDialog" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Please confirm</h5>
+                <button type="button" class="btn btn-close-modern" data-dismiss="modal" aria-label="Close">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 5L15 15M15 5L5 15" stroke="#cfe9f2" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to permanently delete this note?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="confirm_delete()">Yes</button>
+                <button type="button" class="btn btn-primary" data-dismiss="modal"">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<link href="editor.css" rel="stylesheet">
+<script>
+    let jotbox_editor = {};
+    const jotbox_text_encoder = new TextEncoder();
+    const jotbox_text_decoder = new TextDecoder();
+    const KEY_CACHE_STORAGE = 'jotbox_key_cache_v1';
+    let encryption_key_words = null;
+    const session_id = '{{session_id}}';
+    const user_sub = '{{user_sub}}';
+</script>
+<script src="/js/prosemirror.js"></script>
+
+<div class="modal fade" id="graphModal" tabindex="-1" role="dialog" aria-labelledby="graphModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-teal" id="graphModalLabel">Note Graph Search</h5>
+                <button type="button" class="btn btn-close-modern" data-dismiss="modal" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M5 5L15 15M15 5L5 15" stroke="#cccccc" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body p-0">
+                <!-- Graph visualization -->
+                <div id="graph-container" style="width: 100%; height: 80vh"></div>
+                <div class="container">
+                   <div class="row" style="width: 100%">
+                       <div class="col"><label for="search-field">Search terms</label></div>
+                       <div class="col-8"><input id="search-field" oninput="search_text_entered()" type="text" style="width: 100%"></div>
+                       <div class="col"><code id="search-results"></code></div>
+                   </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passwordModal" tabindex="-1" role="dialog" aria-labelledby="passwordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title" id="passwordModalLabel">Enter Your Password</h5>
+            </div>
+            <div class="modal-body">
+                <p>This password is used to encrypt and decrypt your notes locally in your browser. It is never sent to the server. You need to remember this as it cannot be recovered and you will lose access to your notes if you forget it.</p>
+                <input type="password" id="decryptPassword" class="form-control" placeholder="Password" />
+                <div class="invalid-feedback mt-2" id="passwordError" style="display: none;">Incorrect password. Please try again.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="submitPassword">Decrypt Notes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const hideStatsTooltip = function () {
+        $('#stats-div').tooltip('hide');
+    };
+
+    $('#graphModal').on('show.bs.modal', hideStatsTooltip);
+    $('#graphModal').on('shown.bs.modal', function () {
+        // Delay helps rendering; place your graph init here
+        setTimeout(() => {
+            let x = cy.width() / 2;
+            let y = cy.height() / 2;
+            //cy.pan({ x: x, y: y });
+            cy.center();
+        }, 100);
+    });
+    $('#graphModal').on('hidden.bs.modal', hideStatsTooltip);
+
+</script>
+<script src="markdown-editor.js"></script>
+
+<script>
+    let cy = null;
+    let last_search_results = [];
+    let searching = false;
+
+    const scrollSmoothlyToBottom = (id) => {
+        const element = $(`#${id}`);
+        element.animate({
+            scrollTop: element.prop("scrollHeight")
+        }, 500);
+    }
+
+    function getJSON(url, success_fn)
+    {
+        $.ajax({
+            beforeSend: function(request) {
+                request.setRequestHeader("X-Session-Key", session_id);
+            },
+            dataType: "json",
+            url: url,
+            success: success_fn
+        });
+    }
+
+    function update_recents()
+    {
+        //Populate recents
+        let list = $('#recent');
+        list.empty();
+
+        getJSON("/api/recent", function (data) {
+            data.forEach(function(doc) {
+                const item = $('<li class="list-group-item doc-link"></li>');
+                const titleRow = $('<div class="font-weight-bold"></div>').text(doc.title);
+                const topicLabel = $('<span class="topic-chip badge mt-1"></span>')
+                    .text(format_topic_label(doc.topic));
+                style_topic_element(topicLabel, doc.topic);
+                item.empty().append(titleRow).append(topicLabel);
+                item.on('click', function() { retrieve_doc(doc.id); });
+                list.append(item);
+            });
+        });
+    }
+
+    function search_text_entered()
+    {
+        let field = document.getElementById('search-field');
+        let text = field.value;
+        if (!searching && (text.endsWith(' ') || text.endsWith('\n')))
+        {
+            document.getElementById("search-results").innerText = 'Searching...';
+            search().catch(function(err) {
+                console.error("Search failed", err);
+            });
+        }
+    }
+
+    function search()
+    {
+        let search_text = document.getElementById('search-field').value;
+        searching = true;
+
+        // Remove the old results
+        if (last_search_results.length > 0)
+        {
+            last_search_results.forEach(function(id) {
+                var ani = cy.$('#' + id).animation({
+                    style: {
+                        'width': 30,
+                        'height': 30,
+                        'outline-width': 0
+                    },
+                    duration: 100
+                });
+                ani.play();
+            });
+        }
+
+        $.ajax({
+            type: "POST",
+            beforeSend: function(request) {
+                request.setRequestHeader("X-Session-Key", session_id);
+            },
+            url: "/api/related",
+            data: search_text,
+            dataType: "JSON",
+            success: function (data) {
+                document.getElementById("search-results").innerText = data.length + ' results.';
+
+                for (var i = 0, len = data.length; i < len; i++) {
+
+                    let color = '#d08080'
+
+                    last_search_results.push(data[i].id);
+                    var ani = cy.$('#' + data[i].id).animation({
+                        style: {
+                            'width': 40,
+                            'height': 40,
+                            'outline-color': color,
+                            'outline-width': 8,
+                            'outline-opacity': data[i].score * 1.5 / 100.0
+                        },
+                        duration: 400
+                    });
+                    ani.play();
+                }
+                searching = false;
+
+            },
+            error: function () {
+                document.getElementById("search-results").innerText = 'Search failed.';
+                searching = false;
+            }
+        });
+    }
+
+
+    function update_related(sources)
+    {
+        if (!updating_related) {
+            updating_related = true;
+            //Populate related
+            let list = $('#related');
+            list.empty();
+            const renderEmpty = () => {
+                list.append('<li class="list-group-item bg-transparent text-muted small">No related notes yet. Start writing or run a chat to see suggestions.</li>');
+            };
+
+            if (sources != null)
+            {
+                if (sources.length === 0) {
+                    renderEmpty();
+                } else {
+                    sources.forEach(function(source) {
+                        const item = $('<li class="list-group-item doc-link"></li>');
+                        item.text(source.title);
+                        item.on('click', function() { retrieve_doc(source.id); });
+                        list.append(item);
+                    });
+                }
+                updating_related = false;
+            }
+            else {
+                $.ajax({
+                    type: "POST",
+                    beforeSend: function(request) {
+                        request.setRequestHeader("X-Session-Key", session_id);
+                    },
+                    url: "/api/related",
+                    data: jotbox_editor.content,
+                    dataType: "JSON",
+                    success: function (data) {
+                        if (!data || data.length === 0) {
+                            renderEmpty();
+                        } else {
+                            data.forEach(function(doc) {
+                                const item = $('<li class="list-group-item d-flex justify-content-between align-items-center doc-link"></li>');
+                                const titleSpan = $('<span></span>').text(doc.title);
+                                const scoreBar = $('<div class="related-score-bar" style="width: 80px;"></div>');
+                                const scoreFill = $('<div style="height: 6px; background: #00b3b3;"></div>');
+                                scoreFill.css('width', Math.min(100, Math.max(0, doc.score)) + '%');
+                                scoreBar.append(scoreFill);
+                                item.append(titleSpan);
+                                item.append(scoreBar);
+                                item.on('click', function() { retrieve_doc(doc.id); });
+                                list.append(item);
+                            });
+                        }
+                        updating_related = false;
+                    },
+                    error: function () {
+                        renderEmpty();
+                        updating_related = false;
+                    }
+                });
+            }
+        }
+    }
+
+
+    function new_note()
+    {
+        if (loaded_doc_text != jotbox_editor.content)
+        {
+            resume_target = "new_note";
+            resume_id = "";
+            $('#confirmDialog').modal('show');
+        }
+        else {
+            loaded_doc_id = 0;
+            loaded_doc_text = "";
+            update_note_topic('');
+            jotbox_editor.destroy();
+            jotbox_editor.refresh("");
+            jotbox_editor.focus();
+            loaded_doc_text = jotbox_editor.content;
+            let list = $('#related');
+            list.empty();
+        }
+    }
+
+    function save_note()
+    {
+        if (note_view) {
+            if (!encryption_key_words) {
+                $('#passwordModal').modal('show');
+                return;
+            }
+
+            const plaintext = jotbox_editor.content;
+            const trimmed = (plaintext || "").trim();
+            if (trimmed.length <= 1) {
+                return;
+            }
+
+            let save_doc = {};
+            save_doc.id = loaded_doc_id;
+            save_doc.ciphertext = encrypt_note_text(plaintext);
+            save_doc.plaintext = plaintext;
+            save_doc.title = derive_title_from_text(plaintext);
+
+            if (save_doc.ciphertext.length > 1) {
+                $.ajax({
+                    type: "POST",
+                    beforeSend: function (request) {
+                        request.setRequestHeader("X-Session-Key", session_id);
+                    },
+                    url: "/api/save",
+                    data: JSON.stringify(save_doc),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "text",
+                    success: function (data) {
+                        $('#saved-badge').show();
+                        setTimeout(function () {
+                            $('#saved-badge').hide();
+                        }, 2000);
+                        loaded_doc_text = jotbox_editor.content;
+                        var json = $.parseJSON(data);
+                        loaded_doc_id = json.id;
+                        update_note_topic(json.topic);
+                        update_related();
+                        update_recents();
+                        update_graph();
+                    },
+                    error: function (xhr) {
+                        $('#saved-badge').hide();
+                        let message = "Failed to save note.";
+                        if (xhr && xhr.responseText) {
+                            try {
+                                let body = JSON.parse(xhr.responseText);
+                                if (body.error) {
+                                    message = body.error;
+                                }
+                            } catch (_) {
+                                message = xhr.responseText;
+                            }
+                        }
+                        alert(message);
+                    }
+                });
+            }
+        }
+    }
+
+    function retrieve_doc(id)
+    {
+        //note_clicked();
+
+        if (loaded_doc_text != jotbox_editor.content)
+        {
+            resume_target = "retrieve_doc";
+            resume_id = id;
+            $('#confirmDialog').modal('show');
+        }
+        else
+        {
+            getJSON("/api/retrieve/" + id, function (doc) {
+
+                loaded_doc_id = doc.id;
+                update_note_topic(doc.topic);
+                let decrypted_text = "";
+                try {
+                    decrypted_text = decrypt_note_text(doc.text);
+                } catch (e) {
+                    if (e && e.message === 'ENCRYPTION_KEY_NOT_INITIALISED') {
+                        return;
+                    }
+                    console.error("Failed to decrypt note", e);
+                    decrypted_text = doc.text || "";
+                }
+
+                jotbox_editor.destroy();
+                jotbox_editor.refresh(decrypted_text);
+                jotbox_editor.focus();
+                loaded_doc_text = decrypted_text;
+                update_related();
+            });
+        }
+    }
+
+    function delete_note()
+    {
+        if (note_view)
+        {
+            if (!delete_confirmed)
+            {
+                $('#deleteDialog').modal('show');
+            }
+            else
+            {
+                delete_confirmed = false;
+                getJSON("/api/delete/" + loaded_doc_id, function () {
+                    loaded_doc_text = jotbox_editor.content;
+                    new_note();
+                    update_recents();
+                    update_graph();
+                });
+            }
+        }
+    }
+
+    function confirm_delete()
+    {
+        delete_confirmed = true;
+        delete_note();
+    }
+
+    function resume_discard()
+    {
+        loaded_doc_text = jotbox_editor.content;
+        let target = eval(resume_target);
+        target(resume_id);
+    }
+
+    function resume_save()
+    {
+        save_note();
+        let target = eval(resume_target);
+        target(resume_id);
+    }
+
+    function update_graph()
+    {
+        last_search_results = [];
+        searching = false;
+        document.getElementById('search-field').value = '';
+
+        getJSON('/api/graph', function(g) {
+
+            if (cy != null) { cy.destroy(); }
+
+            cy = window.cy = cytoscape({
+
+                container: graph_elem,
+
+                elements: graph_to_cy(g),
+
+                style: [ // the stylesheet for the graph
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': 'data(color)',
+                            'border-color': 'data(color)',
+                            'border-width': 2,
+                            'label': 'data(label)',
+                            'font-size': 16,
+                            'color': '#f5fbff',
+                            'text-outline-color': '#082028',
+                            'text-outline-width': 3,
+                            'text-background-color': '#082028',
+                            'text-background-opacity': 0.7,
+                            'text-background-padding': 4,
+                            'text-margin-y': -18,
+                            'text-wrap': 'wrap',
+                            'text-max-width': '140px',
+                            'text-valign': 'top',
+                            'text-halign': 'center'
+                        }
+                    },
+
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#7a8891',
+                            'target-arrow-shape': 'none',
+                            'curve-style': 'bezier'
+                        }
+                    }
+                ],
+
+                layout: {
+                    name: 'cose',
+                    idealEdgeLength: 140,
+                    nodeOverlap: 20,
+                    refresh: 20,
+                    fit: true,
+                    padding: 80,
+                    randomize: false,
+                    componentSpacing: 220,
+                    nodeRepulsion: 1000000,
+                    edgeElasticity: 120,
+                    nestingFactor: 5,
+                    gravity: 80,
+                    numIter: 1000,
+                    initialTemp: 200,
+                    coolingFactor: 0.95,
+                    minTemp: 1.0 }
+
+            });
+
+            cy.on('tap', 'node', function(evt){
+                var node = evt.target;
+                $('#graphModal').modal('hide');
+                retrieve_doc(node.id());
+            });
+
+            const statsText = document.getElementById('stats-text');
+            if (statsText) {
+                statsText.innerText = num_notes + " notes, " + num_subjects + " topics";
+            }
+
+            const pendingCount = g.pending_topics || 0;
+            handle_topic_pending(pendingCount);
+        });
+    }
+
+    function handle_topic_pending(pendingCount)
+    {
+        if (pendingCount > 0) {
+            awaiting_topic_labels = true;
+            schedule_topic_poll();
+            return;
+        }
+
+        if (awaiting_topic_labels) {
+            awaiting_topic_labels = false;
+            if (topic_label_timer) {
+                clearTimeout(topic_label_timer);
+                topic_label_timer = null;
+            }
+            update_recents();
+        }
+    }
+
+    function schedule_topic_poll()
+    {
+        if (topic_label_timer) {
+            clearTimeout(topic_label_timer);
+        }
+        topic_label_timer = setTimeout(check_topic_completion, 3500);
+    }
+
+    function check_topic_completion()
+    {
+        getJSON('/api/topics/pending', function (data) {
+            const pending = data.pending || 0;
+            if (pending === 0) {
+                awaiting_topic_labels = false;
+                if (topic_label_timer) {
+                    clearTimeout(topic_label_timer);
+                    topic_label_timer = null;
+                }
+                update_recents();
+            } else {
+                schedule_topic_poll();
+            }
+        });
+    }
+
+    // Global vars
+    let loaded_doc_id = 0;
+    let loaded_doc_text = "";
+    let note_view = true;
+    let chat_interaction = {};
+    chat_interaction.history = [];
+    chat_interaction.context = "";
+    chat_interaction.sources = [];
+    let decrypted_notes_cache = {};
+    let chat_loading = false;
+
+    // For resume
+    let resume_target = "";
+    let resume_id = "";
+    let delete_confirmed = false;
+    let updating_related = false;
+
+
+    const graph_elem = document.getElementById('graph-container');
+    var graph;
+    let topic_label_timer = null;
+    let awaiting_topic_labels = false;
+
+    $(document).ready(function ()
+    {
+        $('#saved-badge').hide();
+        $('#stats-div').tooltip({ trigger: 'hover focus', placement: 'bottom' });
+        $('#stats-div').on('click', function () {
+            $(this).tooltip('hide');
+        });
+
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                // Prevent the Save dialog to open
+                e.preventDefault();
+                // Place your code here
+                save_note();
+            }
+        });
+
+        $('#chatModal').on('shown.bs.modal', function () {
+            render_chat_history();
+            $('#chatPrompt').trigger('focus');
+        });
+
+        $('#chatSendButton').on('click', function () {
+            submit_chat_prompt();
+        });
+
+        $('#chatClearButton').on('click', function () {
+            clear_chat_history();
+        });
+
+        $('#chatPrompt').on('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit_chat_prompt();
+            }
+        });
+
+        check_for_encryption_key();
+
+    });
+
+    function set_cookie(name, value) {
+        document.cookie = name +'='+ value +'; Path=/;';
+    }
+
+    function get_cookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function logout()
+    {
+        clear_cached_encryption_key();
+        set_cookie("stop-logon", "true");
+        window.location = "/";
+    }
+
+    function cache_encryption_key(key, name = KEY_CACHE_STORAGE) {
+        sessionStorage.setItem(name, key);
+    }
+
+    function get_cached_encryption_key(name = KEY_CACHE_STORAGE) {
+        return sessionStorage.getItem(name);
+    }
+
+    function clear_cached_encryption_key(name = KEY_CACHE_STORAGE) {
+        sessionStorage.removeItem(name);
+    }
+
+    function derive_salt_from_user() {
+        if (!user_sub || user_sub.length === 0) {
+            return null;
+        }
+
+        const prefix = "jotbox-salt:";
+        const data1 = Array.from(stringToBytes(prefix + user_sub));
+        const data2 = Array.from(stringToBytes(prefix + user_sub + ":2"));
+        const hash1 = speck_hash_64(data1);
+        const hash2 = speck_hash_64(data2);
+        const words = hash1.concat(hash2).map((word) => word >>> 0);
+
+        const buffer = new ArrayBuffer(words.length * 4);
+        const view = new DataView(buffer);
+        for (let i = 0; i < words.length; i++) {
+            view.setUint32(i * 4, words[i], true);
+        }
+        return new Uint8Array(buffer);
+    }
+
+    function set_expanded_key(cookie_key)
+    {
+        try {
+            const parsed = Array.from(fromHex(cookie_key));
+            if (parsed.length !== 4 || parsed.some(isNaN)) {
+                throw new Error("Invalid key material");
+            }
+            encryption_key_words = parsed;
+            update_graph();
+            update_recents();
+            return true;
+        } catch (e) {
+            console.error("Failed to load encryption key", e);
+            encryption_key_words = null;
+            clear_cached_encryption_key();
+            return false;
+        }
+    }
+
+    async function derive_key_material(password, saltBytes) {
+        const encoder = new TextEncoder();
+        const baseKey = await window.crypto.subtle.importKey(
+            "raw",
+            encoder.encode(password),
+            "PBKDF2",
+            false,
+            ["deriveBits"]
+        );
+        const bits = await window.crypto.subtle.deriveBits(
+            {
+                name: "PBKDF2",
+                salt: saltBytes,
+                iterations: 250000,
+                hash: "SHA-256"
+            },
+            baseKey,
+            128
+        );
+        return new Uint8Array(bits);
+    }
+
+    async function derive_encryption_key(password) {
+        const saltBytes = derive_salt_from_user();
+        if (!saltBytes) {
+            throw new Error("Unable to derive salt for encryption key.");
+        }
+        return derive_key_material(password, saltBytes);
+    }
+
+    function request_password(message)
+    {
+        if (message) {
+            $('#passwordError').text(message).show();
+        } else {
+            $('#passwordError').hide();
+        }
+
+        $('#decryptPassword').val("");
+
+        $('#passwordModal').modal({
+            backdrop: 'static',
+            keyboard: false
+        });
+
+        $('#submitPassword').off('click').on('click', async function () {
+            const password = $('#decryptPassword').val();
+            if (!password) {
+                $('#passwordError').text('Please enter a password.').show();
+                return;
+            }
+
+            try {
+                const derived = await derive_encryption_key(password);
+                const keyHex = toHex(derived);
+                cache_encryption_key(keyHex);
+                if (set_expanded_key(keyHex)) {
+                    $('#passwordError').hide();
+                    $('#passwordModal').modal('hide');
+                } else {
+                    $('#passwordError').text('Unable to initialize encryption. Please try again.').show();
+                }
+            } catch (err) {
+                console.error("Error deriving encryption key", err);
+                $('#passwordError').text('Failed to derive key. Please try again.').show();
+            }
+        });
+    }
+
+    function check_for_encryption_key()
+    {
+        let cached_key = get_cached_encryption_key();
+
+        if (cached_key == null)
+        {
+            request_password();
+        }
+        else
+        {
+            if (!set_expanded_key(cached_key)) {
+                request_password("Encryption key invalid or expired. Please enter your password again.");
+            }
+        }
+    }
+
+
+    function ensure_encryption_ready() {
+        if (!encryption_key_words || encryption_key_words.length !== 4) {
+            request_password();
+            throw new Error("ENCRYPTION_KEY_NOT_INITIALISED");
+        }
+    }
+
+    function render_markdown(text) {
+        if (window.marked && typeof marked.parse === 'function') {
+            return marked.parse(text);
+        }
+
+        const escape_html = (str) => {
+            return (str || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+        };
+
+        const apply_inline = (str) => {
+            return str
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        };
+
+        if (!text || text.length === 0) {
+            return "";
+        }
+
+        const lines = text.split('\n');
+        let html = '';
+        let inList = false;
+        let inCodeBlock = false;
+
+        lines.forEach((line) => {
+            const trimmed = line.trim();
+
+            if (trimmed.startsWith('```')) {
+                if (!inCodeBlock) {
+                    html += '<pre><code>';
+                    inCodeBlock = true;
+                } else {
+                    html += '</code></pre>';
+                    inCodeBlock = false;
+                }
+                return;
+            }
+
+            if (inCodeBlock) {
+                html += `${escape_html(line)}\n`;
+                return;
+            }
+
+            if (/^\s*[-*]\s+/.test(line)) {
+                if (!inList) {
+                    html += '<ul>';
+                    inList = true;
+                }
+                const content = line.replace(/^\s*[-*]\s+/, '');
+                html += `<li>${apply_inline(escape_html(content))}</li>`;
+                return;
+            } else if (inList) {
+                html += '</ul>';
+                inList = false;
+            }
+
+            if (trimmed.length === 0) {
+                html += '';
+            } else if (/^#{3}\s+/.test(trimmed)) {
+                html += `<h3>${apply_inline(escape_html(trimmed.replace(/^#{3}\s+/, '')))}</h3>`;
+            } else if (/^#{2}\s+/.test(trimmed)) {
+                html += `<h2>${apply_inline(escape_html(trimmed.replace(/^#{2}\s+/, '')))}</h2>`;
+            } else if (/^#\s+/.test(trimmed)) {
+                html += `<h1>${apply_inline(escape_html(trimmed.replace(/^#\s+/, '')))}</h1>`;
+            } else if (/^>\s+/.test(trimmed)) {
+                html += `<blockquote>${apply_inline(escape_html(trimmed.replace(/^>\s+/, '')))}</blockquote>`;
+            } else if (/^---+$/.test(trimmed)) {
+                html += '<hr />';
+            } else {
+                html += `<p>${apply_inline(escape_html(trimmed))}</p>`;
+            }
+        });
+
+        if (inList) {
+            html += '</ul>';
+        }
+        if (inCodeBlock) {
+            html += '</code></pre>';
+        }
+
+        return html;
+    }
+
+
+    function encryption_key_segments() {
+        ensure_encryption_ready();
+        return {
+            left: [encryption_key_words[0], encryption_key_words[1]],
+            right: [encryption_key_words[2], encryption_key_words[3]]
+        };
+    }
+
+    function encrypt_note_text(plaintext) {
+        if (!plaintext || plaintext.length === 0) {
+            return "";
+        }
+        ensure_encryption_ready();
+        const plainBytes = Array.from(jotbox_text_encoder.encode(plaintext));
+        const cipherBytes = [];
+        const ivWords = new Uint32Array(2);
+        if (window.crypto && window.crypto.getRandomValues) {
+            window.crypto.getRandomValues(ivWords);
+        } else {
+            ivWords[0] = Math.floor(Math.random() * 0xffffffff);
+            ivWords[1] = Math.floor(Math.random() * 0xffffffff);
+        }
+        const ivArray = [ivWords[0], ivWords[1]];
+        const segments = encryption_key_segments();
+        speck_cbc_encrypt_64_128(
+            plainBytes,
+            cipherBytes,
+            ivArray,
+            segments.left.slice(),
+            segments.right.slice()
+        );
+        const ivBytes = new Uint8Array(new Uint32Array(ivArray).buffer);
+        const payload = new Uint8Array(ivBytes.length + cipherBytes.length);
+        payload.set(ivBytes, 0);
+        payload.set(Uint8Array.from(cipherBytes), ivBytes.length);
+        return encode_bytes_to_base64(payload);
+    }
+
+    function decrypt_note_text(ciphertext) {
+        if (!ciphertext || ciphertext.length === 0) {
+            return "";
+        }
+        ensure_encryption_ready();
+        try {
+            const payload = decode_base64_to_bytes(ciphertext);
+            const ivBytes = payload.slice(0, 8);
+            const cipherBytes = Array.from(payload.slice(8));
+            const ivWords = Array.from(bytes_to_uint32_t(Array.from(ivBytes)));
+            const segments = encryption_key_segments();
+            const plaintext = [];
+            speck_cbc_decrypt_64_128(
+                plaintext,
+                cipherBytes,
+                [ivWords[0], ivWords[1]],
+                segments.left.slice(),
+                segments.right.slice()
+            );
+            return jotbox_text_decoder.decode(new Uint8Array(plaintext));
+        } catch (e) {
+            if (e && e.message === 'ENCRYPTION_KEY_NOT_INITIALISED') {
+                throw e;
+            }
+            console.error("Failed to decrypt note payload", e);
+            return ciphertext;
+        }
+    }
+
+    function derive_title_from_text(text) {
+        const lines = text.split('\n');
+        for (let line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.length > 0) {
+                return trimmed.replace(/^#+\s*/, '').substring(0, 120);
+            }
+        }
+        return "Untitled note";
+    }
+
+    function post_json(url, payload) {
+        return new Promise(function(resolve, reject) {
+            $.ajax({
+                type: "POST",
+                beforeSend: function(request) {
+                    request.setRequestHeader("X-Session-Key", session_id);
+                },
+                url: url,
+                data: JSON.stringify(payload),
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                timeout: 120000,
+                success: function(data) { resolve(data); },
+                error: function(err) { reject(err); }
+            });
+        });
+    }
+
+    function format_topic_label(topic) {
+        return (topic && topic.trim().length > 0) ? topic.trim() : 'Topic pending';
+    }
+
+    function style_topic_element($el, topic) {
+        if (!$el || !$el.length) {
+            return;
+        }
+        const colourFn = window.topicColorFor || function() { return '#00b3b3'; };
+        const textFn = window.topicTextColor || function() { return '#041f1f'; };
+        const bgFn = window.topicBackgroundColour || function(hex) { return hex; };
+        const colour = colourFn(topic || '', null);
+        const bgColour = bgFn(colour);
+        const textColour = textFn(colour);
+        $el.css({
+            'background-color': bgColour,
+            'border-color': colour,
+            'color': textColour
+        });
+    }
+
+    function update_note_topic(topic) {
+        const badge = $('#noteTopicBadge');
+        const value = (topic || "").trim();
+        if (value.length === 0) {
+            badge.addClass('d-none');
+            badge.text('Topic');
+            badge.attr('style', '');
+        } else {
+            badge.removeClass('d-none');
+            badge.text(`Topic: ${format_topic_label(value)}`);
+            style_topic_element(badge, value);
+        }
+    }
+
+
+    function set_chat_status(message, severity = 'warning') {
+        const statusEl = $('#chatStatus');
+        statusEl.removeClass('text-warning text-danger text-info');
+        if (!message) {
+            statusEl.addClass('d-none').text('');
+            return;
+        }
+        statusEl.removeClass('d-none');
+        if (severity === 'danger') {
+            statusEl.addClass('text-danger');
+        } else if (severity === 'info') {
+            statusEl.addClass('text-info');
+        } else {
+            statusEl.addClass('text-warning');
+        }
+        statusEl.text(message);
+    }
+
+    function set_chat_loading(isLoading) {
+        chat_loading = isLoading;
+        $('#chatSendButton').prop('disabled', isLoading);
+        $('#chatSendSpinner').toggleClass('d-none', !isLoading);
+        $('#chatSendLabel').text(isLoading ? 'Sending…' : 'Send');
+    }
+
+    function render_chat_history() {
+        const historyEl = $('#chat-history');
+        historyEl.empty();
+        if (!chat_interaction.history || chat_interaction.history.length === 0) {
+            historyEl.append('<p class="text-muted">Start the conversation by asking a question about your notes.</p>');
+            return;
+        }
+
+        chat_interaction.history.forEach(function(entry) {
+            const roleClass = entry.role === 'assistant' ? 'badge-secondary' : 'badge-info';
+            const roleLabel = entry.role === 'assistant' ? 'Assistant' : 'You';
+            const messageHtml = entry.role === 'assistant'
+                ? render_markdown(entry.message)
+                : $('<div/>').text(entry.message).html();
+            historyEl.append(`<div class="chat-message mb-3">
+                <div class="badge ${roleClass}">${roleLabel}</div>
+                <div class="mt-2">${messageHtml}</div>
+            </div>`);
+        });
+        historyEl.scrollTop(historyEl.prop("scrollHeight"));
+    }
+
+    function render_chat_sources(sources) {
+        const list = $('#chatSourcesList');
+        list.empty();
+        if (!sources || sources.length === 0) {
+            list.append('<li class="list-group-item bg-transparent text-muted">No context selected.</li>');
+            return;
+        }
+
+        sources.forEach(function(src, index) {
+            const item = $('<li class="list-group-item bg-transparent d-flex justify-content-between align-items-center chat-source-link" role="button"></li>');
+            const titleSpan = $('<span class="text-light"></span>').text((index + 1) + '. ' + src.title);
+            const scoreSpan = $('<small class="text-muted ml-2"></small>').text(src.score);
+            item.append(titleSpan);
+            item.append(scoreSpan);
+            item.on('click', function () {
+                $('#chatModal').modal('hide');
+                retrieve_doc(src.id);
+            });
+            item.on('keypress', function (evt) {
+                if (evt.key === 'Enter') {
+                    $('#chatModal').modal('hide');
+                    retrieve_doc(src.id);
+                }
+            });
+            list.append(item);
+        });
+    }
+
+    function clear_chat_history() {
+        chat_interaction.history = [];
+        chat_interaction.sources = [];
+        render_chat_history();
+        render_chat_sources([]);
+        set_chat_status('Chat history cleared.', 'info');
+    }
+
+    function encode_bytes_to_base64(bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    function decode_base64_to_bytes(str) {
+        const binary = atob(str);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    function get_or_fetch_decrypted_doc(id) {
+        return new Promise(function(resolve, reject) {
+            if (decrypted_notes_cache[id]) {
+                resolve(decrypted_notes_cache[id]);
+                return;
+            }
+
+            $.ajax({
+                type: "GET",
+                beforeSend: function(request) {
+                    request.setRequestHeader("X-Session-Key", session_id);
+                },
+                url: "/api/retrieve/" + id,
+                dataType: "json",
+                success: function(doc) {
+                    try {
+                        const text = decrypt_note_text(doc.text);
+                        decrypted_notes_cache[id] = { id: doc.id, title: doc.title, topic: doc.topic, text: text };
+                        resolve(decrypted_notes_cache[id]);
+                    } catch (e) {
+                        if (e && e.message === 'ENCRYPTION_KEY_NOT_INITIALISED') {
+                            reject(e);
+                        } else {
+                            decrypted_notes_cache[id] = { id: doc.id, title: doc.title, topic: doc.topic, text: doc.text || "" };
+                            resolve(decrypted_notes_cache[id]);
+                        }
+                    }
+                },
+                error: reject
+            });
+        });
+    }
+
+    async function submit_chat_prompt() {
+        if (chat_loading) {
+            return;
+        }
+
+        const prompt = $('#chatPrompt').val().trim();
+        if (prompt.length === 0) {
+            return;
+        }
+
+        try {
+            ensure_encryption_ready();
+        } catch (e) {
+            return;
+        }
+
+        set_chat_status('');
+        set_chat_loading(true);
+
+        try {
+            const retrievePayload = {
+                query: prompt,
+                history: chat_interaction.history
+            };
+
+            const documentsResponse = await post_json("/api/chat/retrieve", retrievePayload);
+            const documents = documentsResponse.documents || [];
+
+            const contextParts = [];
+            const summaries = [];
+
+            for (let i = 0; i < documents.length; i++) {
+                const doc = documents[i];
+                const decrypted = await get_or_fetch_decrypted_doc(doc.id);
+                const snippet = decrypted.text;
+                contextParts.push(`Document ${i + 1} (${doc.title}): ${snippet}`);
+                summaries.push(doc);
+            }
+
+            chat_interaction.history.push({ role: "user", message: prompt });
+            render_chat_history();
+            $('#chatPrompt').val('');
+
+            if (summaries.length === 0) {
+                set_chat_status("No relevant notes were found for this question.", "warning");
+            }
+
+            const payload = {
+                history: chat_interaction.history,
+                query: prompt,
+                context: contextParts.join("\n\n"),
+                sources: summaries
+            };
+
+            const response = await post_json("/api/chat/generate", payload);
+            chat_interaction.history.push({ role: "assistant", message: response.text });
+            render_chat_history();
+            render_chat_sources(response.sources);
+            update_related(response.sources);
+        } catch (err) {
+            if (err && err.message === 'ENCRYPTION_KEY_NOT_INITIALISED') {
+                return;
+            }
+
+            let message = "Chat failed. Please try again.";
+            if (err && err.responseJSON && err.responseJSON.error) {
+                message = err.responseJSON.error;
+            } else if (err && err.message) {
+                message = err.message;
+            }
+            set_chat_status(message, "danger");
+        } finally {
+            set_chat_loading(false);
+        }
+    }
+</script>
+
+</body>
+</html>

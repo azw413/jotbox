@@ -1,0 +1,96 @@
+.user {
+  color: #333333;
+  border-color: #333;
+  background-color: #b8b998;
+}
+
+.EasyMDEContainer .CodeMirror {
+  color: #333333;
+  border-color: #333;
+  background-color: #d8d0b8;
+}
+.EasyMDEContainer .cm-s-easymde .CodeMirror-cursor {
+  border-color: #000;
+}
+
+.EasyMDEContainer .editor-toolbar > * {
+  color: #ccc;
+}
+
+.EasyMDEContainer .editor-toolbar > .active, .editor-toolbar > button:hover, .editor-preview pre, .cm-s-easymde {
+  background: #0a2933;
+}
+
+.EasyMDEContainer .CodeMirror-fullscreen {
+  background: #000;
+}
+
+.editor-toolbar {
+  border-top: 1px solid #333;
+  border-left: 1px solid #333;
+  border-right: 1px solid #333;
+  background: #0a2933;
+}
+
+.editor-toolbar.fullscreen {
+  background: #0a2933;
+}
+
+.editor-preview {
+  background: #d8d0b8;
+}
+
+.col-centered{
+  float: none;
+  margin: 0 auto;
+}
+
+.toolbar:hover {
+  color:#F3F3F3;
+  -webkit-border-radius: 5px 5px 5px 5px;
+  border-radius: 5px 5px 5px 5px;
+}
+
+.doc-link {
+  color:#708284;
+ }
+
+.doc-link:hover {
+  color:#F3F3F3;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+body {
+  background: #535b5b;
+}
+
+.cm-comment {
+  background: #535b5b;
+}
+
+.card {
+  flex-direction: column;
+  min-width: 0;
+  color: #000;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  -webkit-box-shadow: 0px 0px 5px 0px rgb(249, 249, 250);
+  -moz-box-shadow: 0px 0px 5px 0px rgba(212, 182, 212, 1);
+  box-shadow: 0px 0px 5px 0px rgb(161, 163, 164);
+}
+
+.learn-more {
+  text-decoration: none;
+  color: #000;
+  margin-top: 8px;
+}
+
+.learn-more:hover {
+  text-decoration: none;
+  color: blue;
+  margin-top: 8px;
+}
