@@ -2,6 +2,8 @@
 
 Jotbox is a Rocket-based note taking application that combines a browser editor, Retrieval Augmented Generation (RAG) search, and a per-user SQLite/vector store. Users authenticate with Google, take notes in a ProseMirror-based editor, and can search or chat over their own knowledge base.
 
+Jotbox is currently publicly deployed at https://jotbox.uk so you can use it there if you don't want to deploy it yourself.
+
 ## Capabilities
 
 - Google Sign-In gated access to a personal workspace (`src/main.rs`, `templates/index.html.hbs`).
